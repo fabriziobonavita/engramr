@@ -1,5 +1,10 @@
 # Dev notes
 
+## Setup
+```bash
+go mod tidy
+```
+
 ## Start dependencies
 ```bash
 docker compose up -d
