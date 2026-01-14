@@ -3,11 +3,9 @@ package main
 import (
 	"os"
 
-	"github.com/fabriziobonavita/engramr/internal/app"
+	"github.com/fabriziobonavita/engramr/internal/cli"
 )
 
 func main() {
-	if err := app.NewApp().Execute(); err != nil {
-		os.Exit(1)
-	}
+	os.Exit(cli.Run(os.Args[1:]))
 }
