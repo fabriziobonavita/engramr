@@ -61,7 +61,7 @@ go build -o engramr ./cmd/engramr
 
 ### 5) Query
 ```bash
-./engramr query "" --top-k 10
+./engramr query "Some anomaly" --top-k 10
 ```
 
 Expected output (example):

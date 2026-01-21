@@ -1,0 +1,60 @@
+# ======================
+# Go build artifacts
+# ======================
+# Binaries
+/bin/
+/dist/
+/build/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+
+# Go coverage / profiling
+*.out
+*.prof
+*.coverprofile
+
+# ======================
+# Project-specific artifacts
+# ======================
+# Experiment run outputs
+/runs/
+
+# ======================
+# IDEs / Editors
+# ======================
+# VS Code
+.vscode/
+.cursor/
+*.code-workspace
+
+# JetBrains (GoLand, IntelliJ)
+.idea/
+*.iml
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*#
+.#*
+
+# ======================
+# macOS
+# ======================
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# macOS system files
+Icon?
+._*
+.Spotlight-V100
+.Trashes

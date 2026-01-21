@@ -1,6 +1,10 @@
 package cmd
 
 import (
+	"context"
+	"strings"
+
+	"github.com/fabriziobonavita/engramr/internal/engine"
 	"github.com/spf13/cobra"
 )
 
@@ -16,8 +20,21 @@ Returns the top-K most relevant results with scores and snippets.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			queryText := args[0]
-			// TODO: not implemented
-			cmd.Printf("TODO: not implemented (query: %q, top-k: %d)\n", queryText, topK)
+			eng := engine.NewDefault()
+			hits, err := eng.Query(context.Background(), queryText, topK)
+			if err != nil {
+				return err
+			}
+
+			for i, h := range hits {
+				heading := strings.Join(h.HeadingPath, " > ")
+				if heading == "" {
+					heading = "(no heading)"
+				}
+				cmd.Printf("%d) %s :: %s\n", i+1, h.SourcePath, heading)
+				cmd.Printf("   score: %.4f\n", h.Score)
+				cmd.Printf("   snippet: %s\n\n", engine.Snippet(h.Content, 200))
+			}
 			return nil
 		},
 	}

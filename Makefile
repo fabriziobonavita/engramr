@@ -3,7 +3,7 @@ SHELL := /bin/bash
 .PHONY: build run test lint
 
 build:
-	go build -o engramr ./cmd/engramr
+	go build -o bin/engramr ./cmd/engramr
 
 run: build
 	./engramr --help

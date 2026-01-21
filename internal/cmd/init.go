@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"context"
+
+	"github.com/fabriziobonavita/engramr/internal/engine"
 	"github.com/spf13/cobra"
 )
 
@@ -12,8 +15,11 @@ func NewInitCmd() *cobra.Command {
 		Long: `Initialize engramr by creating the necessary Qdrant collection
 if it doesn't already exist.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// TODO: not implemented
-			cmd.Println("TODO: not implemented")
+			eng := engine.NewDefault()
+			if err := eng.Init(context.Background()); err != nil {
+				return err
+			}
+			cmd.Println("initialized")
 			return nil
 		},
 	}
