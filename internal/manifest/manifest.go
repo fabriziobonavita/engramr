@@ -9,13 +9,13 @@ import (
 
 // Manifest tracks which points belong to which files.
 type Manifest struct {
-	Version int                 `json:"version"`
+	Version int                  `json:"version"`
 	Files   map[string]FileEntry `json:"files"` // key: source_path
 }
 
 // FileEntry tracks metadata for a single file.
 type FileEntry struct {
-	Mtime   int64    `json:"mtime"`
+	Mtime    int64    `json:"mtime"`
 	PointIDs []string `json:"point_ids"`
 }
 

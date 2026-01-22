@@ -13,6 +13,7 @@
 *.dll
 *.so
 *.dylib
+engrmar
 
 # Test binaries
 *.test
