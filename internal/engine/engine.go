@@ -14,9 +14,14 @@ import (
 
 	"github.com/fabriziobonavita/engramr/internal/chunk"
 	"github.com/fabriziobonavita/engramr/internal/embed"
+	"github.com/fabriziobonavita/engramr/internal/manifest"
 	"github.com/fabriziobonavita/engramr/internal/store"
 	"github.com/google/uuid"
 )
+
+// Namespace UUID for deterministic point ID generation.
+// This is a fixed UUID used as the namespace for SHA1-based UUID generation.
+var pointIDNamespace = uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
 const (
 	DefaultQdrantURL        = "http://localhost:6334"
@@ -59,6 +64,8 @@ func (e *Engine) Init(ctx context.Context) error {
 type IngestSummary struct {
 	FilesIngested  int
 	ChunksUpserted int
+	ChunksDeleted  int
+	Errors         int
 }
 
 func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, error) {
@@ -82,6 +89,13 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 	// Ensure collection exists (requires embedder reachable).
 	if err := e.Init(ctx); err != nil {
 		return sum, err
+	}
+
+	// Load manifest
+	manifestPath := ".engramr/index.json"
+	m, err := manifest.Load(manifestPath)
+	if err != nil {
+		return sum, fmt.Errorf("failed to load manifest: %w", err)
 	}
 
 	var mdFiles []string
@@ -125,14 +139,19 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 		return nil
 	}
 
+	// Process each file
 	for _, filePath := range mdFiles {
 		b, err := os.ReadFile(filePath)
 		if err != nil {
-			return sum, err
+			sum.Errors++
+			log.Printf("error reading file %s: %v", filePath, err)
+			continue
 		}
 		info, err := os.Stat(filePath)
 		if err != nil {
-			return sum, err
+			sum.Errors++
+			log.Printf("error statting file %s: %v", filePath, err)
+			continue
 		}
 
 		rel, err := filepath.Rel(rootDir, filePath)
@@ -143,15 +162,26 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 
 		chunks := chunk.ChunkMarkdown(rel, string(b))
 		if len(chunks) == 0 {
+			// Remove file from manifest if it has no chunks
+			m.SetFile(rel, manifest.FileEntry{
+				Mtime:    info.ModTime().Unix(),
+				PointIDs: []string{},
+			})
 			continue
 		}
 
 		sum.FilesIngested++
 
+		// Compute deterministic point IDs for all chunks
+		var newPointIDs []string
+		var pointsToUpsert []store.Point
+
 		for _, c := range chunks {
 			vec, err := e.Embedder.Embed(ctx, c.Content)
 			if err != nil {
-				return sum, err
+				sum.Errors++
+				log.Printf("error embedding chunk in %s: %v", c.SourcePath, err)
+				continue
 			}
 
 			// Skip chunks with empty vectors
@@ -161,10 +191,10 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 			}
 
 			contentHash := sha1Hex([]byte(c.Content))
-			chunkID := sha1Hex([]byte(c.SourcePath + "|" + strings.Join(c.HeadingPath, ">") + "|" + strconv.Itoa(c.ChunkIndex) + "|" + contentHash))
-
-			// Generate UUID for Qdrant ID
-			pointID := uuid.New().String()
+			// Build chunkKey: source_path + "\n" + heading_path + "\n" + chunk_index + "\n" + content_hash
+			chunkKey := c.SourcePath + "\n" + strings.Join(c.HeadingPath, "/") + "\n" + strconv.Itoa(c.ChunkIndex) + "\n" + contentHash
+			pointID := PointIDFromChunkKey(chunkKey)
+			newPointIDs = append(newPointIDs, pointID)
 
 			// Convert heading_path from []string to []any for Qdrant compatibility
 			headingPathAny := make([]any, len(c.HeadingPath))
@@ -173,7 +203,6 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 			}
 
 			payload := map[string]any{
-				"chunk_id":      chunkID,
 				"source_path":   c.SourcePath,
 				"heading_path":  headingPathAny,
 				"chunk_index":   c.ChunkIndex,
@@ -183,22 +212,56 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 				"content":       c.Content,
 			}
 
-			batch = append(batch, store.Point{
+			pointsToUpsert = append(pointsToUpsert, store.Point{
 				ID:      pointID,
 				Vector:  vec,
 				Payload: payload,
 			})
+		}
 
+		// Get old point IDs from manifest
+		oldEntry, _ := m.GetFile(rel)
+
+		deleteIDs := diffIds(oldEntry.PointIDs, newPointIDs)
+
+		// Delete stale points (best-effort)
+		if len(deleteIDs) > 0 {
+			if err := e.Store.DeletePoints(ctx, e.Collection, deleteIDs); err != nil {
+				sum.Errors++
+				log.Printf("error deleting stale points for %s: %v", rel, err)
+			} else {
+				sum.ChunksDeleted += len(deleteIDs)
+			}
+		}
+
+		// Upsert new points
+		for _, p := range pointsToUpsert {
+			batch = append(batch, p)
 			if len(batch) >= batchSize {
 				if err := flush(); err != nil {
-					return sum, err
+					sum.Errors++
+					log.Printf("error upserting batch: %v", err)
+					// Continue processing other files
 				}
 			}
 		}
+
+		// Update manifest entry for this file
+		m.SetFile(rel, manifest.FileEntry{
+			Mtime:    info.ModTime().Unix(),
+			PointIDs: newPointIDs,
+		})
 	}
 
+	// Flush remaining batch
 	if err := flush(); err != nil {
-		return sum, err
+		sum.Errors++
+		log.Printf("error flushing final batch: %v", err)
+	}
+
+	// Save manifest
+	if err := manifest.Save(manifestPath, m); err != nil {
+		return sum, fmt.Errorf("failed to save manifest: %w", err)
 	}
 
 	return sum, nil
@@ -266,4 +329,28 @@ func Snippet(content string, limit int) string {
 func sha1Hex(b []byte) string {
 	sum := sha1.Sum(b)
 	return hex.EncodeToString(sum[:])
+}
+
+// PointIDFromChunkKey generates a deterministic UUID string from a chunk key.
+// The chunkKey format is:
+//
+//	source_path + "\n" + strings.Join(heading_path, "/") + "\n" + strconv.Itoa(chunk_index) + "\n" + content_hash
+func PointIDFromChunkKey(chunkKey string) string {
+	return uuid.NewSHA1(pointIDNamespace, []byte(chunkKey)).String()
+}
+
+// diffIds returns IDs that are in oldIDs but not in newIDs (old - new).
+func diffIds(oldIDs, newIDs []string) []string {
+	newIDsSet := make(map[string]struct{})
+	for _, id := range newIDs {
+		newIDsSet[id] = struct{}{}
+	}
+
+	var deleteIDs []string
+	for _, id := range oldIDs {
+		if _, ok := newIDsSet[id]; !ok {
+			deleteIDs = append(deleteIDs, id)
+		}
+	}
+	return deleteIDs
 }

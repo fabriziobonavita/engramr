@@ -126,9 +126,10 @@ func chunkSection(sourcePath string, s section, fileLen int) []Chunk {
 
 	// Section small enough: single chunk.
 	if len(sec) <= maxSize {
-		if len(sec) < 200 && fileLen >= 200 {
-			return nil
-		}
+		// This noise filtering is not useful for now.
+		//if len(sec) < 200 && fileLen >= 200 {
+		//	return nil
+		//}
 		return []Chunk{{
 			SourcePath:  sourcePath,
 			HeadingPath: append([]string(nil), s.headingPath...),

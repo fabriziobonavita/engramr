@@ -151,6 +151,35 @@ func (c *QdrantClient) UpsertPoints(ctx context.Context, collection string, poin
 	return nil
 }
 
+func (c *QdrantClient) DeletePoints(ctx context.Context, collection string, pointIDs []string) error {
+	if len(pointIDs) == 0 {
+		return nil
+	}
+
+	client, err := c.getClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Convert string IDs to Qdrant IDs
+	ids := make([]*qdrant.PointId, 0, len(pointIDs))
+	for _, idStr := range pointIDs {
+		ids = append(ids, qdrant.NewID(idStr))
+	}
+
+	wait := true
+	_, err = client.Delete(ctx, &qdrant.DeletePoints{
+		CollectionName: collection,
+		Points:         qdrant.NewPointsSelector(ids...),
+		Wait:           &wait,
+	})
+	if err != nil {
+		return fmt.Errorf("qdrant delete failed: %w", err)
+	}
+
+	return nil
+}
+
 func (c *QdrantClient) Search(ctx context.Context, collection string, queryVector []float32, topK int) ([]SearchResult, error) {
 	client, err := c.getClient(ctx)
 	if err != nil {

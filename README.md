@@ -74,6 +74,23 @@ Expected output (example):
 - Stable chunk IDs to avoid duplication on re-ingest
 - Everything runs locally
 
+## Indexing semantics
+
+Engramr uses deterministic point IDs and a local manifest file to ensure idempotent ingest operations and clean index maintenance.
+
+**Deterministic point IDs**: Each chunk gets a stable UUID derived from its content and context using SHA1-based UUID generation. The same chunk (same source path, heading path, chunk index, and content hash) always produces the same point ID, enabling idempotent re-indexing.
+
+**Manifest file**: A local manifest at `.engramr/index.json` tracks which point IDs belong to each indexed file. During ingest:
+- The manifest records the point IDs for each file
+- On re-ingest, old point IDs are compared with new ones
+- Stale chunks (present in old but not in new) are automatically deleted from Qdrant
+- This removes outdated chunks for edited files without scanning Qdrant
+
+This approach ensures that:
+- Re-running `ingest` on the same files is idempotent (no duplicates)
+- Edited files automatically clean up their old chunks
+- No Qdrant scans are needed to discover what to delete
+
 ## Roadmap (non-binding)
 - JSON output mode
 - Summarize top-K hits (minimal RAG)
