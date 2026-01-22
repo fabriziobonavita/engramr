@@ -109,6 +109,20 @@ func (c *QdrantClient) EnsureCollection(ctx context.Context, name string, vector
 	return nil
 }
 
+func (c *QdrantClient) DeleteCollection(ctx context.Context, name string) error {
+	client, err := c.getClient(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = client.DeleteCollection(ctx, name)
+	if err != nil {
+		return fmt.Errorf("failed to delete collection: %w", err)
+	}
+
+	return nil
+}
+
 func (c *QdrantClient) UpsertPoints(ctx context.Context, collection string, points []Point) error {
 	if len(points) == 0 {
 		return nil

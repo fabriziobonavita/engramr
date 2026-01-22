@@ -56,7 +56,10 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 	}
 
 	// Load manifest
-	manifestPath := ".engramr/index.json"
+	manifestPath := e.ManifestPath
+	if manifestPath == "" {
+		manifestPath = DefaultManifestPath
+	}
 	m, err := manifest.Load(manifestPath)
 	if err != nil {
 		return sum, fmt.Errorf("failed to load manifest: %w", err)

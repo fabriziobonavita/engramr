@@ -15,17 +15,25 @@ const (
 	DefaultOllamaURL        = "http://localhost:11434"
 	DefaultEmbeddingModel   = "nomic-embed-text"
 	DefaultSnippetCharLimit = 200
+	DefaultManifestPath     = ".engramr/index.json"
 )
 
 type Engine struct {
-	Collection string
-	Embedder   *embed.OllamaClient
-	Store      *store.QdrantClient
+	Collection   string
+	ManifestPath string // Path to manifest file. If empty, uses DefaultManifestPath.
+	Embedder     *embed.OllamaClient
+	Store        *store.QdrantClient
 }
 
 func NewDefault() *Engine {
+	return New(DefaultCollection)
+}
+
+// New creates an Engine with a custom collection name.
+// This is useful for tests that need isolated collections.
+func New(collection string) *Engine {
 	return &Engine{
-		Collection: DefaultCollection,
+		Collection: collection,
 		Embedder: &embed.OllamaClient{
 			BaseURL: DefaultOllamaURL,
 			Model:   DefaultEmbeddingModel,
