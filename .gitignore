@@ -1,6 +1,9 @@
 # ======================
 # Go build artifacts
 # ======================
+# Project meta
+.engramr/
+
 # Binaries
 /bin/
 /dist/

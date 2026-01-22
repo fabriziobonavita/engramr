@@ -23,7 +23,7 @@ Files are chunked and embedded, then stored in Qdrant.`,
 				return err
 			}
 
-			cmd.Printf("files processed: %d\nchunks upserted: %d\nchunks deleted: %d\n", sum.FilesIngested, sum.ChunksUpserted, sum.ChunksDeleted)
+			cmd.Printf("files processed: %d\nchunks upserted: %d\nchunks deleted: %d\nchunks skipped: %d\n", sum.FilesIngested, sum.ChunksUpserted, sum.ChunksDeleted, sum.ChunksSkipped)
 			if sum.Errors > 0 {
 				cmd.Printf("errors: %d\n", sum.Errors)
 			}

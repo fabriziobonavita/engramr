@@ -65,6 +65,7 @@ type IngestSummary struct {
 	FilesIngested  int
 	ChunksUpserted int
 	ChunksDeleted  int
+	ChunksSkipped  int
 	Errors         int
 }
 
@@ -234,18 +235,28 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 			}
 		}
 
-		// Upsert new points
-		for _, p := range pointsToUpsert {
-			batch = append(batch, p)
-			if len(batch) >= batchSize {
-				if err := flush(); err != nil {
-					sum.Errors++
-					log.Printf("error upserting batch: %v", err)
-					// Continue processing other files
-				}
-			}
+		// Compute IDs to upsert (new - old) - only new or changed points
+		upsertIDs := diffIds(newPointIDs, oldEntry.PointIDs)
+		upsertIDsSet := make(map[string]struct{})
+		for _, id := range upsertIDs {
+			upsertIDsSet[id] = struct{}{}
 		}
 
+		// Filter pointsToUpsert to only include new/changed points
+		for _, p := range pointsToUpsert {
+			if _, shouldUpsert := upsertIDsSet[p.ID]; shouldUpsert {
+				batch = append(batch, p)
+				if len(batch) >= batchSize {
+					if err := flush(); err != nil {
+						sum.Errors++
+						log.Printf("error upserting batch: %v", err)
+						// Continue processing other files
+					}
+				}
+			} else {
+				sum.ChunksSkipped++
+			}
+		}
 		// Update manifest entry for this file
 		m.SetFile(rel, manifest.FileEntry{
 			Mtime:    info.ModTime().Unix(),
