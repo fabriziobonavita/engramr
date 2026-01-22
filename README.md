@@ -1,18 +1,18 @@
 # Engramr
 
-Local-first omni-search for my notes (and a Go skills sandbox).
+Local-first omni-search for my notes (a deliberately scoped Go project).
 
-Engramr is a personal project to build a fast, local-first semantic search tool
+Engramr is a personal project to build a fast, local-first vector-based search tool
 over my own Markdown notes and drafts. The initial goal is "omni-search":
 ingest -> search -> resurface relevant passages with citations.
 
 Later (only if useful), it may evolve into a local-first cognitive helper
-(summaries, synthesis, write-back), but that is not the v0 promise.
+(summaries, synthesis, write-back), but that is explicitly not the v0 promise.
 
-This is not a startup and not a generic "RAG demo".
+This is not a startup and not a generic RAG/chat demo.
 
 ## What it is (v0)
-- Local-first semantic search over Markdown files
+- Local-first semantic/vector search over Markdown files
 - Qdrant as local vector store
 - Ollama for local embeddings
 - CLI-first and intentionally single-user
@@ -22,11 +22,11 @@ This is not a startup and not a generic "RAG demo".
 - No cloud services
 - No accounts/auth/sync/collaboration
 - No agent framework
-- No "chat with your docs" product positioning (yet)
+- No "chat with your docs" product positioning
 - No guarantees of stability (early project)
 
 ## Status
-Very early (v0). Public for transparency and learning, not polish.
+Early (v0). Public by design: correctness and learning over polish.
 
 ## Quickstart
 
@@ -71,21 +71,24 @@ Expected output (example):
 
 ## Design notes (v0)
 - Markdown-aware chunking (split by headings, then paragraphs)
-- Stable chunk IDs to avoid duplication on re-ingest
+- Deterministic chunk and point IDs for idempotent re-ingest
+- Local manifest to track indexed state per file
 - Everything runs locally
 
 ## Indexing semantics
 
-Engramr uses deterministic point IDs and a local manifest file to ensure idempotent ingest operations and clean index maintenance. See [docs/indexing.md](docs/indexing.md) for details on chunking rules, deterministic IDs, manifest tracking, and reindex semantics.
+Engramr uses deterministic point IDs and a local manifest file to ensure idempotent
+ingest operations and clean index maintenance.
+See docs/indexing.md for details.
 
 ## Troubleshooting
 
-See [docs/troubleshooting.md](docs/troubleshooting.md) for common issues and solutions.
+See docs/troubleshooting.md for common issues and solutions.
 
 ## Roadmap (non-binding)
 - JSON output mode
-- Summarize top-K hits (minimal RAG)
-- Write-back/synthesis notes
+- Optional summarization of retrieved passages
+- Write-back / synthesis notes
 - Desktop UI (maybe Tauri later)
 - PDF ingestion
 
