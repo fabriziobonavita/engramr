@@ -73,7 +73,7 @@ func (f *FileStore) Load(baseDir string) (*IndexState, error) {
 	if !locked {
 		return nil, fmt.Errorf("index state is locked by another process")
 	}
-	defer lock.Unlock()
+	defer func() { _ = lock.Unlock() }()
 
 	// Read file
 	data, err := os.ReadFile(indexPath)
@@ -118,7 +118,7 @@ func (f *FileStore) Save(baseDir string, state *IndexState) error {
 	if !locked {
 		return fmt.Errorf("index state is locked by another process")
 	}
-	defer lock.Unlock()
+	defer func() { _ = lock.Unlock() }()
 
 	// Ensure directory exists
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
@@ -159,7 +159,7 @@ func (f *FileStore) Transaction(baseDir string, fn func(*IndexState) error) erro
 	if !locked {
 		return fmt.Errorf("index state is locked by another process")
 	}
-	defer lock.Unlock()
+	defer func() { _ = lock.Unlock() }()
 
 	// Load state
 	var state *IndexState
@@ -216,4 +216,3 @@ func (f *FileStore) Transaction(baseDir string, fn func(*IndexState) error) erro
 
 	return nil
 }
-
