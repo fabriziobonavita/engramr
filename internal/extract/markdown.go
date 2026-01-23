@@ -72,10 +72,8 @@ func splitSections(markdown string) []section {
 			if level-1 < len(curHeadingPath) {
 				curHeadingPath = curHeadingPath[:level-1]
 			}
-			if level-1 > len(curHeadingPath) {
-				// if headings jump levels, just treat as next level under current
-				// without inserting empties.
-			}
+			// If headings jump levels (level-1 > len(curHeadingPath)), just treat as next level
+			// under current without inserting empties - we simply append the title.
 			curHeadingPath = append(curHeadingPath, title)
 			continue
 		}
