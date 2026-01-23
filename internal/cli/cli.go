@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/fabriziobonavita/engramr/internal/buildinfo"
-	"github.com/fabriziobonavita/engramr/internal/cmd"
+	"github.com/fabriziobonavita/engramr/internal/command"
 	"github.com/spf13/cobra"
 )
 
@@ -52,9 +52,9 @@ func newRootCmd() *cobra.Command {
 	}
 
 	rootCmd.AddCommand(
-		cmd.NewInitCmd(),
-		cmd.NewIngestCmd(),
-		cmd.NewQueryCmd(),
+		command.NewInitCmd(),
+		command.NewIngestCmd(),
+		command.NewQueryCmd(),
 		newVersionCmd(),
 		newCompletionCmd(rootCmd),
 	)

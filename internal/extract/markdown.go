@@ -1,4 +1,4 @@
-package chunk
+package extract
 
 import (
 	"strings"

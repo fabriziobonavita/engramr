@@ -1,4 +1,4 @@
-package engine
+package ingest
 
 import (
 	"context"
@@ -12,15 +12,28 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/fabriziobonavita/engramr/internal/chunk"
+	"github.com/fabriziobonavita/engramr/internal/embed"
+	"github.com/fabriziobonavita/engramr/internal/extract"
 	"github.com/fabriziobonavita/engramr/internal/manifest"
 	"github.com/fabriziobonavita/engramr/internal/store"
 	"github.com/google/uuid"
 )
 
+const (
+	DefaultManifestPath = ".engramr/index.json"
+)
+
 // Namespace UUID for deterministic point ID generation.
 // This is a fixed UUID used as the namespace for SHA1-based UUID generation.
 var pointIDNamespace = uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
+
+// Ingestor orchestrates extract+embed+store+manifest for ingestion.
+type Ingestor struct {
+	Collection   string
+	ManifestPath string // Path to manifest file. If empty, uses DefaultManifestPath.
+	Embedder     *embed.OllamaClient
+	Store        *store.QdrantClient
+}
 
 // IngestSummary reports the results of an ingest operation.
 type IngestSummary struct {
@@ -31,8 +44,20 @@ type IngestSummary struct {
 	Errors         int
 }
 
+// Init ensures the collection exists (requires embedder reachable).
+func (i *Ingestor) Init(ctx context.Context) error {
+	vec, err := i.Embedder.Embed(ctx, "engramr vector size probe")
+	if err != nil {
+		return err
+	}
+	if len(vec) == 0 {
+		return fmt.Errorf("ollama returned empty embedding vector")
+	}
+	return i.Store.EnsureCollection(ctx, i.Collection, len(vec))
+}
+
 // IngestPath ingests markdown files from the given path, updating the index and manifest.
-func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, error) {
+func (i *Ingestor) IngestPath(ctx context.Context, path string) (IngestSummary, error) {
 	var sum IngestSummary
 
 	absRoot, err := filepath.Abs(path)
@@ -51,12 +76,12 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 	}
 
 	// Ensure collection exists (requires embedder reachable).
-	if err := e.Init(ctx); err != nil {
+	if err := i.Init(ctx); err != nil {
 		return sum, err
 	}
 
 	// Load manifest
-	manifestPath := e.ManifestPath
+	manifestPath := i.ManifestPath
 	if manifestPath == "" {
 		manifestPath = DefaultManifestPath
 	}
@@ -76,7 +101,7 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 		if len(batch) == 0 {
 			return nil
 		}
-		if err := e.Store.UpsertPoints(ctx, e.Collection, batch); err != nil {
+		if err := i.Store.UpsertPoints(ctx, i.Collection, batch); err != nil {
 			return err
 		}
 		sum.ChunksUpserted += len(batch)
@@ -86,7 +111,7 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 
 	// Process each file
 	for _, filePath := range mdFiles {
-		if err := e.processFile(ctx, filePath, rootDir, m, &sum, &batch, batchSize, flush); err != nil {
+		if err := i.processFile(ctx, filePath, rootDir, m, &sum, &batch, batchSize, flush); err != nil {
 			sum.Errors++
 			log.Printf("error processing file %s: %v", filePath, err)
 			// Continue with other files
@@ -108,7 +133,7 @@ func (e *Engine) IngestPath(ctx context.Context, path string) (IngestSummary, er
 }
 
 // processFile processes a single markdown file for ingestion.
-func (e *Engine) processFile(
+func (i *Ingestor) processFile(
 	ctx context.Context,
 	filePath string,
 	rootDir string,
@@ -133,7 +158,7 @@ func (e *Engine) processFile(
 	}
 	rel = filepath.ToSlash(rel)
 
-	chunks := chunk.ChunkMarkdown(rel, string(b))
+	chunks := extract.ChunkMarkdown(rel, string(b))
 	if len(chunks) == 0 {
 		// Remove file from manifest if it has no chunks
 		m.SetFile(rel, manifest.FileEntry{
@@ -146,7 +171,7 @@ func (e *Engine) processFile(
 	sum.FilesIngested++
 
 	// Process chunks: compute IDs, embed, build points
-	newPointIDs, pointsToUpsert, err := e.processChunks(ctx, chunks, info.ModTime().Unix(), sum)
+	newPointIDs, pointsToUpsert, err := i.processChunks(ctx, chunks, info.ModTime().Unix(), sum)
 	if err != nil {
 		return fmt.Errorf("processing chunks: %w", err)
 	}
@@ -157,7 +182,7 @@ func (e *Engine) processFile(
 	// Delete stale points (old - new)
 	deleteIDs := diffIds(oldEntry.PointIDs, newPointIDs)
 	if len(deleteIDs) > 0 {
-		if err := e.Store.DeletePoints(ctx, e.Collection, deleteIDs); err != nil {
+		if err := i.Store.DeletePoints(ctx, i.Collection, deleteIDs); err != nil {
 			log.Printf("error deleting stale points for %s: %v", rel, err)
 		} else {
 			sum.ChunksDeleted += len(deleteIDs)
@@ -194,12 +219,12 @@ func (e *Engine) processFile(
 }
 
 // processChunks processes chunks: embeds content, computes point IDs, and builds store points.
-func (e *Engine) processChunks(ctx context.Context, chunks []chunk.Chunk, mtime int64, sum *IngestSummary) ([]string, []store.Point, error) {
+func (i *Ingestor) processChunks(ctx context.Context, chunks []extract.Chunk, mtime int64, sum *IngestSummary) ([]string, []store.Point, error) {
 	var newPointIDs []string
 	var pointsToUpsert []store.Point
 
 	for _, c := range chunks {
-		vec, err := e.Embedder.Embed(ctx, c.Content)
+		vec, err := i.Embedder.Embed(ctx, c.Content)
 		if err != nil {
 			sum.Errors++
 			log.Printf("error embedding chunk in %s: %v", c.SourcePath, err)

@@ -12,7 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fabriziobonavita/engramr/internal/engine"
+	"github.com/fabriziobonavita/engramr/internal/embed"
+	"github.com/fabriziobonavita/engramr/internal/ingest"
+	"github.com/fabriziobonavita/engramr/internal/search"
+	"github.com/fabriziobonavita/engramr/internal/store"
 )
 
 const (
@@ -52,23 +55,38 @@ func TestIntegration(t *testing.T) {
 
 	// Create unique collection name
 	collectionName := fmt.Sprintf("engramr_test_%d", time.Now().UnixNano())
-	eng := engine.New(collectionName)
-	eng.ManifestPath = manifestPath
+
+	// Create shared clients
+	embedder := &embed.OllamaClient{
+		BaseURL: ollamaURL,
+		Model:   "nomic-embed-text",
+	}
+	storeClient := &store.QdrantClient{
+		BaseURL: qdrantURL,
+	}
+
+	// Create ingestor
+	ing := &ingest.Ingestor{
+		Collection:   collectionName,
+		ManifestPath: manifestPath,
+		Embedder:     embedder,
+		Store:        storeClient,
+	}
 
 	// Cleanup: delete collection at end (best effort)
 	defer func() {
-		if err := eng.Store.DeleteCollection(ctx, collectionName); err != nil {
+		if err := ing.Store.DeleteCollection(ctx, collectionName); err != nil {
 			t.Logf("warning: failed to cleanup test collection %s: %v", collectionName, err)
 		}
 	}()
 
 	// Initialize collection
-	if err := eng.Init(ctx); err != nil {
+	if err := ing.Init(ctx); err != nil {
 		t.Fatalf("init failed: %v", err)
 	}
 
 	// Ingest test fixture
-	sum, err := eng.IngestPath(ctx, testDataPath)
+	sum, err := ing.IngestPath(ctx, testDataPath)
 	if err != nil {
 		t.Fatalf("ingest failed: %v", err)
 	}
@@ -79,8 +97,15 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("ingest had %d errors", sum.Errors)
 	}
 
+	// Create searcher
+	searcher := &search.Searcher{
+		Collection: collectionName,
+		Embedder:   embedder,
+		Store:      storeClient,
+	}
+
 	// Query for sentinel phrase
-	hits, err := eng.Query(ctx, sentinelPhrase, 5)
+	hits, err := searcher.Query(ctx, sentinelPhrase, 5)
 	if err != nil {
 		t.Fatalf("query failed: %v", err)
 	}

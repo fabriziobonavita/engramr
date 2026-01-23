@@ -1,10 +1,12 @@
-package cmd
+package command
 
 import (
 	"context"
 	"strings"
 
-	"github.com/fabriziobonavita/engramr/internal/engine"
+	"github.com/fabriziobonavita/engramr/internal/embed"
+	"github.com/fabriziobonavita/engramr/internal/search"
+	"github.com/fabriziobonavita/engramr/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -20,8 +22,17 @@ Returns the top-K most relevant results with scores and snippets.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			queryText := args[0]
-			eng := engine.NewDefault()
-			hits, err := eng.Query(context.Background(), queryText, topK)
+			searcher := &search.Searcher{
+				Collection: DefaultCollection,
+				Embedder: &embed.OllamaClient{
+					BaseURL: DefaultOllamaURL,
+					Model:   DefaultEmbeddingModel,
+				},
+				Store: &store.QdrantClient{
+					BaseURL: DefaultQdrantURL,
+				},
+			}
+			hits, err := searcher.Query(context.Background(), queryText, topK)
 			if err != nil {
 				return err
 			}
@@ -33,7 +44,7 @@ Returns the top-K most relevant results with scores and snippets.`,
 				}
 				cmd.Printf("%d) %s :: %s\n", i+1, h.SourcePath, heading)
 				cmd.Printf("   score: %.4f\n", h.Score)
-				cmd.Printf("   snippet: %s\n\n", engine.Snippet(h.Content, 200))
+				cmd.Printf("   snippet: %s\n\n", search.Snippet(h.Content, 200))
 			}
 			return nil
 		},
