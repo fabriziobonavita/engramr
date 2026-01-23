@@ -13,13 +13,13 @@ import (
 	"strings"
 
 	"github.com/fabriziobonavita/engramr/internal/extract"
-	"github.com/fabriziobonavita/engramr/internal/manifest"
+	"github.com/fabriziobonavita/engramr/internal/indexstate"
 	"github.com/fabriziobonavita/engramr/internal/store"
 	"github.com/google/uuid"
 )
 
 const (
-	DefaultManifestPath = ".engramr/index.json"
+	DefaultIndexStateBaseDir = ".engramr"
 )
 
 // Namespace UUID for deterministic point ID generation.
@@ -38,19 +38,13 @@ type Store interface {
 	DeletePoints(ctx context.Context, collection string, pointIDs []string) error
 }
 
-// ManifestStore is an interface for manifest operations.
-type ManifestStore interface {
-	Load(path string) (*manifest.Manifest, error)
-	Save(path string, m *manifest.Manifest) error
-}
-
-// Ingestor orchestrates extract+embed+store+manifest for ingestion.
+// Ingestor orchestrates extract+embed+store+indexstate for ingestion.
 type Ingestor struct {
-	Collection   string
-	ManifestPath string // Path to manifest file. If empty, uses DefaultManifestPath.
-	Embedder     Embedder
-	Store        Store
-	Manifest     ManifestStore
+	Collection        string
+	IndexStateBaseDir string // Base directory for index state. If empty, uses DefaultIndexStateBaseDir.
+	Embedder          Embedder
+	Store             Store
+	IndexState        indexstate.Store // Index state store. If nil, uses a default file-based store.
 }
 
 // IngestSummary reports the results of an ingest operation.
@@ -74,7 +68,7 @@ func (i *Ingestor) Init(ctx context.Context) error {
 	return i.Store.EnsureCollection(ctx, i.Collection, len(vec))
 }
 
-// IngestPath ingests markdown files from the given path, updating the index and manifest.
+// IngestPath ingests markdown files from the given path, updating the index and index state.
 func (i *Ingestor) IngestPath(ctx context.Context, path string) (IngestSummary, error) {
 	var sum IngestSummary
 
@@ -98,18 +92,14 @@ func (i *Ingestor) IngestPath(ctx context.Context, path string) (IngestSummary, 
 		return sum, err
 	}
 
-	// Load manifest
-	manifestPath := i.ManifestPath
-	if manifestPath == "" {
-		manifestPath = DefaultManifestPath
+	// Get index state base directory
+	baseDir := i.IndexStateBaseDir
+	if baseDir == "" {
+		baseDir = DefaultIndexStateBaseDir
 	}
-	manifestStore := i.Manifest
-	if manifestStore == nil {
-		manifestStore = &fileManifestStore{}
-	}
-	m, err := manifestStore.Load(manifestPath)
-	if err != nil {
-		return sum, fmt.Errorf("failed to load manifest: %w", err)
+	indexStore := i.IndexState
+	if indexStore == nil {
+		indexStore = indexstate.NewFileStore()
 	}
 
 	mdFiles := findMarkdownFiles(absRoot, stat)
@@ -131,24 +121,28 @@ func (i *Ingestor) IngestPath(ctx context.Context, path string) (IngestSummary, 
 		return nil
 	}
 
-	// Process each file
-	for _, filePath := range mdFiles {
-		if err := i.processFile(ctx, filePath, rootDir, m, &sum, &batch, batchSize, flush); err != nil {
-			sum.Errors++
-			log.Printf("error processing file %s: %v", filePath, err)
-			// Continue with other files
+	// Use transaction for entire read-modify-write cycle
+	err = indexStore.Transaction(baseDir, func(state *indexstate.IndexState) error {
+		// Process each file
+		for _, filePath := range mdFiles {
+			if err := i.processFile(ctx, filePath, rootDir, state, &sum, &batch, batchSize, flush); err != nil {
+				sum.Errors++
+				log.Printf("error processing file %s: %v", filePath, err)
+				// Continue with other files
+			}
 		}
-	}
 
-	// Flush remaining batch
-	if err := flush(); err != nil {
-		sum.Errors++
-		log.Printf("error flushing final batch: %v", err)
-	}
+		// Flush remaining batch
+		if err := flush(); err != nil {
+			sum.Errors++
+			log.Printf("error flushing final batch: %v", err)
+			return err
+		}
 
-	// Save manifest
-	if err := manifestStore.Save(manifestPath, m); err != nil {
-		return sum, fmt.Errorf("failed to save manifest: %w", err)
+		return nil
+	})
+	if err != nil {
+		return sum, fmt.Errorf("failed to update index state: %w", err)
 	}
 
 	return sum, nil
@@ -159,7 +153,7 @@ func (i *Ingestor) processFile(
 	ctx context.Context,
 	filePath string,
 	rootDir string,
-	m *manifest.Manifest,
+	state *indexstate.IndexState,
 	sum *IngestSummary,
 	batch *[]store.Point,
 	batchSize int,
@@ -182,8 +176,8 @@ func (i *Ingestor) processFile(
 
 	chunks := extract.ChunkMarkdown(rel, string(b))
 	if len(chunks) == 0 {
-		// Remove file from manifest if it has no chunks
-		m.SetFile(rel, manifest.FileEntry{
+		// Remove file from index state if it has no chunks
+		state.SetFile(rel, indexstate.FileEntry{
 			Mtime:    info.ModTime().Unix(),
 			PointIDs: []string{},
 		})
@@ -198,8 +192,8 @@ func (i *Ingestor) processFile(
 		return fmt.Errorf("processing chunks: %w", err)
 	}
 
-	// Get old point IDs from manifest
-	oldEntry, _ := m.GetFile(rel)
+	// Get old point IDs from index state
+	oldEntry, _ := state.GetFile(rel)
 
 	// Delete stale points (old - new)
 	deleteIDs := diffIds(oldEntry.PointIDs, newPointIDs)
@@ -231,8 +225,8 @@ func (i *Ingestor) processFile(
 		}
 	}
 
-	// Update manifest entry for this file
-	m.SetFile(rel, manifest.FileEntry{
+	// Update index state entry for this file
+	state.SetFile(rel, indexstate.FileEntry{
 		Mtime:    info.ModTime().Unix(),
 		PointIDs: newPointIDs,
 	})
@@ -343,15 +337,4 @@ func diffIds(oldIDs, newIDs []string) []string {
 func sha1Hex(b []byte) string {
 	sum := sha1.Sum(b)
 	return hex.EncodeToString(sum[:])
-}
-
-// fileManifestStore implements ManifestStore using the file system.
-type fileManifestStore struct{}
-
-func (f *fileManifestStore) Load(path string) (*manifest.Manifest, error) {
-	return manifest.Load(path)
-}
-
-func (f *fileManifestStore) Save(path string, m *manifest.Manifest) error {
-	return manifest.Save(path, m)
 }

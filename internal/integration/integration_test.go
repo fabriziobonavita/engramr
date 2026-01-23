@@ -49,9 +49,8 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("failed to resolve testdata path: %v", err)
 	}
 
-	// Use temp directory for manifest
+	// Use temp directory for index state
 	tmpDir := t.TempDir()
-	manifestPath := filepath.Join(tmpDir, "index.json")
 
 	// Create unique collection name
 	collectionName := fmt.Sprintf("engramr_test_%d", time.Now().UnixNano())
@@ -67,10 +66,10 @@ func TestIntegration(t *testing.T) {
 
 	// Create ingestor
 	ing := &ingest.Ingestor{
-		Collection:   collectionName,
-		ManifestPath: manifestPath,
-		Embedder:     embedder,
-		Store:        storeClient,
+		Collection:        collectionName,
+		IndexStateBaseDir: tmpDir,
+		Embedder:          embedder,
+		Store:             storeClient,
 	}
 
 	// Cleanup: delete collection at end (best effort)

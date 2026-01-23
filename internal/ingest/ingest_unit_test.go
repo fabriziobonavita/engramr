@@ -15,17 +15,16 @@ func TestIngestor_DeterministicIDs(t *testing.T) {
 	// Test that the same chunk content produces the same point ID
 	embedder := newFakeEmbedder()
 	store := newFakeStore()
-	manifestStore := newFakeManifestStore()
+	indexStore := newFakeIndexStateStore()
 
 	tmpDir := t.TempDir()
-	manifestPath := filepath.Join(tmpDir, "manifest.json")
 
 	ing := &Ingestor{
-		Collection:   "test",
-		ManifestPath: manifestPath,
-		Embedder:     embedder,
-		Store:        store,
-		Manifest:     manifestStore,
+		Collection:        "test",
+		IndexStateBaseDir: tmpDir,
+		Embedder:          embedder,
+		Store:             store,
+		IndexState:        indexStore,
 	}
 
 	ctx := context.Background()
@@ -46,15 +45,15 @@ func TestIngestor_DeterministicIDs(t *testing.T) {
 		t.Fatalf("IngestPath failed: %v", err)
 	}
 
-	// Get point IDs from manifest
-	m, _ := manifestStore.Load(manifestPath)
-	entry, ok := m.GetFile("test.md")
+	// Get point IDs from index state
+	state, _ := indexStore.Load(tmpDir)
+	entry, ok := state.GetFile("test.md")
 	if !ok {
-		t.Fatal("test.md not found in manifest")
+		t.Fatal("test.md not found in index state")
 	}
 	firstIDs := entry.PointIDs
 	if len(firstIDs) == 0 {
-		t.Fatal("no point IDs in manifest")
+		t.Fatal("no point IDs in index state")
 	}
 
 	// Ingest again - should produce same IDs
@@ -63,10 +62,10 @@ func TestIngestor_DeterministicIDs(t *testing.T) {
 		t.Fatalf("IngestPath failed second time: %v", err)
 	}
 
-	m2, _ := manifestStore.Load(manifestPath)
-	entry2, ok := m2.GetFile("test.md")
+	state2, _ := indexStore.Load(tmpDir)
+	entry2, ok := state2.GetFile("test.md")
 	if !ok {
-		t.Fatal("test.md not found in manifest after second ingest")
+		t.Fatal("test.md not found in index state after second ingest")
 	}
 	secondIDs := entry2.PointIDs
 
@@ -90,17 +89,16 @@ func TestIngestor_DeterministicIDs(t *testing.T) {
 func TestIngestor_DeletesStaleIDs(t *testing.T) {
 	embedder := newFakeEmbedder()
 	store := newFakeStore()
-	manifestStore := newFakeManifestStore()
+	indexStore := newFakeIndexStateStore()
 
 	tmpDir := t.TempDir()
-	manifestPath := filepath.Join(tmpDir, "manifest.json")
 
 	ing := &Ingestor{
-		Collection:   "test",
-		ManifestPath: manifestPath,
-		Embedder:     embedder,
-		Store:        store,
-		Manifest:     manifestStore,
+		Collection:        "test",
+		IndexStateBaseDir: tmpDir,
+		Embedder:          embedder,
+		Store:             store,
+		IndexState:        indexStore,
 	}
 
 	ctx := context.Background()
@@ -123,8 +121,8 @@ func TestIngestor_DeletesStaleIDs(t *testing.T) {
 	}
 
 	// Get old IDs
-	m1, _ := manifestStore.Load(manifestPath)
-	oldEntry, _ := m1.GetFile("test.md")
+	state1, _ := indexStore.Load(tmpDir)
+	oldEntry, _ := state1.GetFile("test.md")
 	oldIDs := oldEntry.PointIDs
 	if len(oldIDs) < 2 {
 		t.Fatalf("expected at least 2 chunks, got %d", len(oldIDs))
@@ -143,8 +141,8 @@ func TestIngestor_DeletesStaleIDs(t *testing.T) {
 	}
 
 	// Get new IDs
-	m2, _ := manifestStore.Load(manifestPath)
-	newEntry, _ := m2.GetFile("test.md")
+	state2, _ := indexStore.Load(tmpDir)
+	newEntry, _ := state2.GetFile("test.md")
 	newIDs := newEntry.PointIDs
 
 	// Verify deletes: old - new
@@ -189,17 +187,16 @@ func TestIngestor_DeletesStaleIDs(t *testing.T) {
 func TestIngestor_UpsertsNewPoints(t *testing.T) {
 	embedder := newFakeEmbedder()
 	store := newFakeStore()
-	manifestStore := newFakeManifestStore()
+	indexStore := newFakeIndexStateStore()
 
 	tmpDir := t.TempDir()
-	manifestPath := filepath.Join(tmpDir, "manifest.json")
 
 	ing := &Ingestor{
-		Collection:   "test",
-		ManifestPath: manifestPath,
-		Embedder:     embedder,
-		Store:        store,
-		Manifest:     manifestStore,
+		Collection:        "test",
+		IndexStateBaseDir: tmpDir,
+		Embedder:          embedder,
+		Store:             store,
+		IndexState:        indexStore,
 	}
 
 	ctx := context.Background()
@@ -253,20 +250,19 @@ func TestIngestor_UpsertsNewPoints(t *testing.T) {
 	}
 }
 
-func TestIngestor_UpdatesManifestEntry(t *testing.T) {
+func TestIngestor_UpdatesIndexStateEntry(t *testing.T) {
 	embedder := newFakeEmbedder()
 	store := newFakeStore()
-	manifestStore := newFakeManifestStore()
+	indexStore := newFakeIndexStateStore()
 
 	tmpDir := t.TempDir()
-	manifestPath := filepath.Join(tmpDir, "manifest.json")
 
 	ing := &Ingestor{
-		Collection:   "test",
-		ManifestPath: manifestPath,
-		Embedder:     embedder,
-		Store:        store,
-		Manifest:     manifestStore,
+		Collection:        "test",
+		IndexStateBaseDir: tmpDir,
+		Embedder:          embedder,
+		Store:             store,
+		IndexState:        indexStore,
 	}
 
 	ctx := context.Background()
@@ -287,16 +283,16 @@ func TestIngestor_UpdatesManifestEntry(t *testing.T) {
 		t.Fatalf("IngestPath failed: %v", err)
 	}
 
-	// Verify manifest was saved
-	m := manifestStore.getManifest(manifestPath)
-	if m == nil {
-		t.Fatal("manifest was not saved")
+	// Verify index state was saved
+	state := indexStore.getState(tmpDir)
+	if state == nil {
+		t.Fatal("index state was not saved")
 	}
 
 	// Verify entry exists
-	entry, ok := m.GetFile("test.md")
+	entry, ok := state.GetFile("test.md")
 	if !ok {
-		t.Fatal("test.md entry not found in manifest")
+		t.Fatal("test.md entry not found in index state")
 	}
 
 	// Verify entry has point IDs

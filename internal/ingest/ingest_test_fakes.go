@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/fabriziobonavita/engramr/internal/manifest"
+	"github.com/fabriziobonavita/engramr/internal/indexstate"
 	"github.com/fabriziobonavita/engramr/internal/store"
 	"github.com/fabriziobonavita/engramr/internal/testutil"
 )
@@ -92,57 +92,73 @@ func (f *fakeStore) getDeletedPoints(collection string) []string {
 	return f.deletedPoints[collection]
 }
 
-// fakeManifestStore is a fake implementation of ManifestStore for testing.
-type fakeManifestStore struct {
-	manifests map[string]*manifest.Manifest
-	loadErr   error
-	saveErr   error
+// fakeIndexStateStore is a fake implementation of indexstate.Store for testing.
+type fakeIndexStateStore struct {
+	states  map[string]*indexstate.IndexState
+	loadErr error
+	saveErr error
 }
 
-func newFakeManifestStore() *fakeManifestStore {
-	return &fakeManifestStore{
-		manifests: make(map[string]*manifest.Manifest),
+func newFakeIndexStateStore() *fakeIndexStateStore {
+	return &fakeIndexStateStore{
+		states: make(map[string]*indexstate.IndexState),
 	}
 }
 
-func (f *fakeManifestStore) Load(path string) (*manifest.Manifest, error) {
+func (f *fakeIndexStateStore) Load(baseDir string) (*indexstate.IndexState, error) {
 	if f.loadErr != nil {
 		return nil, f.loadErr
 	}
-	if m, ok := f.manifests[path]; ok {
-		return m, nil
+	if s, ok := f.states[baseDir]; ok {
+		return s, nil
 	}
-	// Return empty manifest if not found (matching fileManifestStore behavior)
-	return &manifest.Manifest{
+	// Return empty index state if not found (matching FileStore behavior)
+	return &indexstate.IndexState{
 		Version: 1,
-		Files:   make(map[string]manifest.FileEntry),
+		Files:   make(map[string]indexstate.FileEntry),
 	}, nil
 }
 
-func (f *fakeManifestStore) Save(path string, m *manifest.Manifest) error {
+func (f *fakeIndexStateStore) Save(baseDir string, state *indexstate.IndexState) error {
 	if f.saveErr != nil {
 		return f.saveErr
 	}
-	if m == nil {
-		return fmt.Errorf("manifest is nil")
+	if state == nil {
+		return fmt.Errorf("index state is nil")
 	}
 	// Deep copy
-	filesCopy := make(map[string]manifest.FileEntry)
-	for k, v := range m.Files {
+	filesCopy := make(map[string]indexstate.FileEntry)
+	for k, v := range state.Files {
 		pointIDsCopy := make([]string, len(v.PointIDs))
 		copy(pointIDsCopy, v.PointIDs)
-		filesCopy[k] = manifest.FileEntry{
+		filesCopy[k] = indexstate.FileEntry{
 			Mtime:    v.Mtime,
 			PointIDs: pointIDsCopy,
 		}
 	}
-	f.manifests[path] = &manifest.Manifest{
-		Version: m.Version,
+	f.states[baseDir] = &indexstate.IndexState{
+		Version: state.Version,
 		Files:   filesCopy,
 	}
 	return nil
 }
 
-func (f *fakeManifestStore) getManifest(path string) *manifest.Manifest {
-	return f.manifests[path]
+func (f *fakeIndexStateStore) Transaction(baseDir string, fn func(*indexstate.IndexState) error) error {
+	// Load state
+	state, err := f.Load(baseDir)
+	if err != nil {
+		return err
+	}
+
+	// Execute transaction function
+	if err := fn(state); err != nil {
+		return err
+	}
+
+	// Save state
+	return f.Save(baseDir, state)
+}
+
+func (f *fakeIndexStateStore) getState(baseDir string) *indexstate.IndexState {
+	return f.states[baseDir]
 }
