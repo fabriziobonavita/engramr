@@ -194,3 +194,93 @@ func TestFileStore_PutFile_GetFile_Roundtrip(t *testing.T) {
 		t.Errorf("PointIDs = %v, want %v", retrieved.PointIDs, entry.PointIDs)
 	}
 }
+
+// TestFileStore_FreshRepo tests that all operations work when the base directory doesn't exist yet.
+// This simulates a fresh repo checkout where .engramr/ doesn't exist.
+func TestFileStore_FreshRepo(t *testing.T) {
+	// Create a temp dir, but use a subdirectory that doesn't exist yet
+	tmpDir := t.TempDir()
+	baseDir := filepath.Join(tmpDir, ".engramr")
+	store := NewFileStore()
+
+	// Verify the directory doesn't exist
+	if _, err := os.Stat(baseDir); err == nil {
+		t.Fatal("baseDir should not exist at start of test")
+	}
+
+	// Test Load: should work and create the directory
+	state, err := store.Load(baseDir)
+	if err != nil {
+		t.Fatalf("Load should work on non-existent directory, got: %v", err)
+	}
+	if state == nil {
+		t.Fatal("Load should return non-nil index state")
+	}
+	if state.Version != 1 {
+		t.Errorf("Version = %d, want 1", state.Version)
+	}
+	// Verify directory was created
+	if _, err := os.Stat(baseDir); err != nil {
+		t.Fatalf("Load should create baseDir, got error: %v", err)
+	}
+
+	// Test Save: should work on non-existent directory (though it exists now from Load)
+	// Remove the directory to test Save creating it
+	if err := os.RemoveAll(baseDir); err != nil {
+		t.Fatalf("Failed to remove baseDir: %v", err)
+	}
+
+	testState := &IndexState{
+		Version: 1,
+		Files: map[string]FileEntry{
+			"test.md": {
+				Mtime:    1234567890,
+				PointIDs: []string{"id1", "id2"},
+			},
+		},
+	}
+	if err := store.Save(baseDir, testState); err != nil {
+		t.Fatalf("Save should work on non-existent directory, got: %v", err)
+	}
+	// Verify directory was created
+	if _, err := os.Stat(baseDir); err != nil {
+		t.Fatalf("Save should create baseDir, got error: %v", err)
+	}
+
+	// Test Transaction: should work on non-existent directory
+	// Remove the directory to test Transaction creating it
+	if err := os.RemoveAll(baseDir); err != nil {
+		t.Fatalf("Failed to remove baseDir: %v", err)
+	}
+
+	err = store.Transaction(baseDir, func(state *IndexState) error {
+		state.SetFile("transaction.md", FileEntry{
+			Mtime:    9876543210,
+			PointIDs: []string{"id3", "id4"},
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Transaction should work on non-existent directory, got: %v", err)
+	}
+	// Verify directory was created
+	if _, err := os.Stat(baseDir); err != nil {
+		t.Fatalf("Transaction should create baseDir, got error: %v", err)
+	}
+
+	// Verify the transaction actually saved data
+	loaded, err := store.Load(baseDir)
+	if err != nil {
+		t.Fatalf("Failed to load after transaction: %v", err)
+	}
+	entry, ok := loaded.GetFile("transaction.md")
+	if !ok {
+		t.Fatal("transaction.md entry not found after Transaction")
+	}
+	if entry.Mtime != 9876543210 {
+		t.Errorf("Mtime = %d, want 9876543210", entry.Mtime)
+	}
+	if !reflect.DeepEqual(entry.PointIDs, []string{"id3", "id4"}) {
+		t.Errorf("PointIDs = %v, want [id3 id4]", entry.PointIDs)
+	}
+}
