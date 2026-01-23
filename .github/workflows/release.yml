@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Get version from tag
+        id: tag
+        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Get commit SHA
+        id: commit
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Get build date
+        id: date
+        run: echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_OUTPUT
+
+      - name: Build linux/amd64
+        run: |
+          GOOS=linux GOARCH=amd64 go build \
+            -ldflags "-X github.com/fabriziobonavita/engramr/internal/buildinfo.Version=${{ steps.tag.outputs.version }} -X github.com/fabriziobonavita/engramr/internal/buildinfo.Commit=${{ steps.commit.outputs.sha }} -X github.com/fabriziobonavita/engramr/internal/buildinfo.Date=${{ steps.date.outputs.date }}" \
+            -o engramr_${{ steps.tag.outputs.version }}_linux_amd64 \
+            ./cmd/engramr
+
+      - name: Build darwin/amd64
+        run: |
+          GOOS=darwin GOARCH=amd64 go build \
+            -ldflags "-X github.com/fabriziobonavita/engramr/internal/buildinfo.Version=${{ steps.tag.outputs.version }} -X github.com/fabriziobonavita/engramr/internal/buildinfo.Commit=${{ steps.commit.outputs.sha }} -X github.com/fabriziobonavita/engramr/internal/buildinfo.Date=${{ steps.date.outputs.date }}" \
+            -o engramr_${{ steps.tag.outputs.version }}_darwin_amd64 \
+            ./cmd/engramr
+
+      - name: Build darwin/arm64
+        run: |
+          GOOS=darwin GOARCH=arm64 go build \
+            -ldflags "-X github.com/fabriziobonavita/engramr/internal/buildinfo.Version=${{ steps.tag.outputs.version }} -X github.com/fabriziobonavita/engramr/internal/buildinfo.Commit=${{ steps.commit.outputs.sha }} -X github.com/fabriziobonavita/engramr/internal/buildinfo.Date=${{ steps.date.outputs.date }}" \
+            -o engramr_${{ steps.tag.outputs.version }}_darwin_arm64 \
+            ./cmd/engramr
+
+      - name: Build windows/amd64
+        run: |
+          GOOS=windows GOARCH=amd64 go build \
+            -ldflags "-X github.com/fabriziobonavita/engramr/internal/buildinfo.Version=${{ steps.tag.outputs.version }} -X github.com/fabriziobonavita/engramr/internal/buildinfo.Commit=${{ steps.commit.outputs.sha }} -X github.com/fabriziobonavita/engramr/internal/buildinfo.Date=${{ steps.date.outputs.date }}" \
+            -o engramr_${{ steps.tag.outputs.version }}_windows_amd64.exe \
+            ./cmd/engramr
+
+      - name: Generate SHA256SUMS
+        run: |
+          sha256sum engramr_${{ steps.tag.outputs.version }}_* > SHA256SUMS
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            engramr_${{ steps.tag.outputs.version }}_*
+            SHA256SUMS
