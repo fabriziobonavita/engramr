@@ -289,7 +289,7 @@ func (i *Ingestor) processChunks(ctx context.Context, chunks []extract.Chunk, mt
 func findMarkdownFiles(absRoot string, stat os.FileInfo) []string {
 	var mdFiles []string
 	if stat.IsDir() {
-		filepath.WalkDir(absRoot, func(p string, d fs.DirEntry, walkErr error) error {
+		if err := filepath.WalkDir(absRoot, func(p string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
@@ -300,7 +300,10 @@ func findMarkdownFiles(absRoot string, stat os.FileInfo) []string {
 				mdFiles = append(mdFiles, p)
 			}
 			return nil
-		})
+		}); err != nil {
+			// Return empty list on walk error, caller can handle
+			return nil
+		}
 	} else {
 		if strings.HasSuffix(strings.ToLower(absRoot), ".md") {
 			mdFiles = append(mdFiles, absRoot)

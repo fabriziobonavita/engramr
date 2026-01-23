@@ -188,8 +188,6 @@ func TestSearcher_FormatsHeadingPath(t *testing.T) {
 				t.Errorf("HeadingPath length = %d, want %d", gotLen, wantLen)
 			} else if gotLen > 0 && !reflect.DeepEqual(hit.HeadingPath, tt.wantPath) {
 				t.Errorf("HeadingPath = %v, want %v", hit.HeadingPath, tt.wantPath)
-			} else if gotLen == 0 && wantLen == 0 {
-				// Both empty, that's correct
 			}
 		})
 	}
