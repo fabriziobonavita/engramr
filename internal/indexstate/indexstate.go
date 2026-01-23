@@ -64,6 +64,11 @@ func (f *FileStore) Load(baseDir string) (*IndexState, error) {
 	indexPath := filepath.Join(baseDir, "index.json")
 	lockPath := filepath.Join(baseDir, "index.lock")
 
+	// Ensure directory exists before acquiring lock
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create index state directory: %w", err)
+	}
+
 	// Acquire lock
 	lock := flock.New(lockPath)
 	locked, err := lock.TryLock()
@@ -109,6 +114,11 @@ func (f *FileStore) Save(baseDir string, state *IndexState) error {
 	indexPath := filepath.Join(baseDir, "index.json")
 	lockPath := filepath.Join(baseDir, "index.lock")
 
+	// Ensure directory exists before acquiring lock
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		return fmt.Errorf("failed to create index state directory: %w", err)
+	}
+
 	// Acquire lock
 	lock := flock.New(lockPath)
 	locked, err := lock.TryLock()
@@ -119,11 +129,6 @@ func (f *FileStore) Save(baseDir string, state *IndexState) error {
 		return fmt.Errorf("index state is locked by another process")
 	}
 	defer func() { _ = lock.Unlock() }()
-
-	// Ensure directory exists
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		return fmt.Errorf("failed to create index state directory: %w", err)
-	}
 
 	// Write to temp file first
 	tmpPath := indexPath + ".tmp"
@@ -149,6 +154,11 @@ func (f *FileStore) Save(baseDir string, state *IndexState) error {
 func (f *FileStore) Transaction(baseDir string, fn func(*IndexState) error) error {
 	indexPath := filepath.Join(baseDir, "index.json")
 	lockPath := filepath.Join(baseDir, "index.lock")
+
+	// Ensure directory exists before acquiring lock
+	if err := os.MkdirAll(baseDir, 0755); err != nil {
+		return fmt.Errorf("failed to create index state directory: %w", err)
+	}
 
 	// Acquire lock
 	lock := flock.New(lockPath)
@@ -190,11 +200,6 @@ func (f *FileStore) Transaction(baseDir string, fn func(*IndexState) error) erro
 	// Save state
 	if state == nil {
 		return fmt.Errorf("index state is nil")
-	}
-
-	// Ensure directory exists
-	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		return fmt.Errorf("failed to create index state directory: %w", err)
 	}
 
 	// Write to temp file first
