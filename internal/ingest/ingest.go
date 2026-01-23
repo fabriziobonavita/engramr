@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/fabriziobonavita/engramr/internal/embed"
 	"github.com/fabriziobonavita/engramr/internal/extract"
 	"github.com/fabriziobonavita/engramr/internal/manifest"
 	"github.com/fabriziobonavita/engramr/internal/store"
@@ -27,12 +26,31 @@ const (
 // This is a fixed UUID used as the namespace for SHA1-based UUID generation.
 var pointIDNamespace = uuid.MustParse("6ba7b810-9dad-11d1-80b4-00c04fd430c8")
 
+// Embedder is an interface for embedding text into vectors.
+type Embedder interface {
+	Embed(ctx context.Context, input string) ([]float32, error)
+}
+
+// Store is an interface for vector store operations.
+type Store interface {
+	EnsureCollection(ctx context.Context, name string, vectorSize int) error
+	UpsertPoints(ctx context.Context, collection string, points []store.Point) error
+	DeletePoints(ctx context.Context, collection string, pointIDs []string) error
+}
+
+// ManifestStore is an interface for manifest operations.
+type ManifestStore interface {
+	Load(path string) (*manifest.Manifest, error)
+	Save(path string, m *manifest.Manifest) error
+}
+
 // Ingestor orchestrates extract+embed+store+manifest for ingestion.
 type Ingestor struct {
 	Collection   string
 	ManifestPath string // Path to manifest file. If empty, uses DefaultManifestPath.
-	Embedder     *embed.OllamaClient
-	Store        *store.QdrantClient
+	Embedder     Embedder
+	Store        Store
+	Manifest     ManifestStore
 }
 
 // IngestSummary reports the results of an ingest operation.
@@ -85,7 +103,11 @@ func (i *Ingestor) IngestPath(ctx context.Context, path string) (IngestSummary, 
 	if manifestPath == "" {
 		manifestPath = DefaultManifestPath
 	}
-	m, err := manifest.Load(manifestPath)
+	manifestStore := i.Manifest
+	if manifestStore == nil {
+		manifestStore = &fileManifestStore{}
+	}
+	m, err := manifestStore.Load(manifestPath)
 	if err != nil {
 		return sum, fmt.Errorf("failed to load manifest: %w", err)
 	}
@@ -125,7 +147,7 @@ func (i *Ingestor) IngestPath(ctx context.Context, path string) (IngestSummary, 
 	}
 
 	// Save manifest
-	if err := manifest.Save(manifestPath, m); err != nil {
+	if err := manifestStore.Save(manifestPath, m); err != nil {
 		return sum, fmt.Errorf("failed to save manifest: %w", err)
 	}
 
@@ -321,4 +343,15 @@ func diffIds(oldIDs, newIDs []string) []string {
 func sha1Hex(b []byte) string {
 	sum := sha1.Sum(b)
 	return hex.EncodeToString(sum[:])
+}
+
+// fileManifestStore implements ManifestStore using the file system.
+type fileManifestStore struct{}
+
+func (f *fileManifestStore) Load(path string) (*manifest.Manifest, error) {
+	return manifest.Load(path)
+}
+
+func (f *fileManifestStore) Save(path string, m *manifest.Manifest) error {
+	return manifest.Save(path, m)
 }

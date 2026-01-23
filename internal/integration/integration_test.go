@@ -74,8 +74,9 @@ func TestIntegration(t *testing.T) {
 	}
 
 	// Cleanup: delete collection at end (best effort)
+	// Use concrete storeClient directly since DeleteCollection is not part of the interface
 	defer func() {
-		if err := ing.Store.DeleteCollection(ctx, collectionName); err != nil {
+		if err := storeClient.DeleteCollection(ctx, collectionName); err != nil {
 			t.Logf("warning: failed to cleanup test collection %s: %v", collectionName, err)
 		}
 	}()

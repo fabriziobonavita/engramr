@@ -137,3 +137,83 @@ More details under a duplicate heading.
 		}
 	}
 }
+
+func TestChunkMarkdown_HeadingPathEdgeCases(t *testing.T) {
+	tests := []struct {
+		name       string
+		sourcePath string
+		md         string
+		wantPaths  [][]string
+	}{
+		{
+			name:       "empty heading path (root level content)",
+			sourcePath: "notes/root.md",
+			md:         "Content at root level with no headings.\n\nMore content here.",
+			wantPaths:  [][]string{{}},
+		},
+		{
+			name:       "nested heading path with empty sections",
+			sourcePath: "notes/nested.md",
+			md: `# Level 1
+
+Content under level 1.
+
+## Level 2
+
+Content under level 2.
+
+### Level 3
+
+Content under level 3.
+
+## Another Level 2
+
+Content under another level 2.`,
+			wantPaths: [][]string{
+				{"Level 1"},
+				{"Level 1", "Level 2"},
+				{"Level 1", "Level 2", "Level 3"},
+				{"Level 1", "Another Level 2"},
+			},
+		},
+		{
+			name:       "heading path with special characters",
+			sourcePath: "notes/special.md",
+			md: `# Heading with / and \ characters
+
+Content here.
+
+## Sub-heading with "quotes" and 'apostrophes'
+
+More content.`,
+			wantPaths: [][]string{
+				{"Heading with / and \\ characters"},
+				{"Heading with / and \\ characters", "Sub-heading with \"quotes\" and 'apostrophes'"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chunks := ChunkMarkdown(tt.sourcePath, tt.md)
+			if len(chunks) < len(tt.wantPaths) {
+				t.Fatalf("got %d chunks, want at least %d", len(chunks), len(tt.wantPaths))
+			}
+
+			// Verify heading paths match expected
+			for i := 0; i < len(tt.wantPaths) && i < len(chunks); i++ {
+				got := chunks[i].HeadingPath
+				want := tt.wantPaths[i]
+				if len(got) != len(want) {
+					t.Errorf("chunk[%d] heading path length = %d, want %d", i, len(got), len(want))
+					continue
+				}
+				for j := range want {
+					if got[j] != want[j] {
+						t.Errorf("chunk[%d].HeadingPath[%d] = %q, want %q", i, j, got[j], want[j])
+					}
+				}
+			}
+		})
+	}
+}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/fabriziobonavita/engramr/internal/embed"
 	"github.com/fabriziobonavita/engramr/internal/store"
 )
 
@@ -17,11 +16,22 @@ const (
 	DefaultSnippetCharLimit = 200
 )
 
+// Embedder is an interface for embedding text into vectors.
+type Embedder interface {
+	Embed(ctx context.Context, input string) ([]float32, error)
+}
+
+// Store is an interface for vector store operations.
+type Store interface {
+	EnsureCollection(ctx context.Context, name string, vectorSize int) error
+	Search(ctx context.Context, collection string, queryVector []float32, topK int) ([]store.SearchResult, error)
+}
+
 // Searcher orchestrates embed+store and returns results.
 type Searcher struct {
 	Collection string
-	Embedder   *embed.OllamaClient
-	Store      *store.QdrantClient
+	Embedder   Embedder
+	Store      Store
 }
 
 // QueryHit represents a single search result.
