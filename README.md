@@ -56,8 +56,15 @@ go build -o engramr ./cmd/engramr
 
 ### 4) Ingest notes (recursively ingests *.md)
 ```bash
-./engramr ingest ./notes
+./engramr ingest path ./notes
 ```
+
+Or ingest a web page:
+```bash
+./engramr ingest url https://example.com/article
+```
+
+URL ingest uses readability-based extraction to extract main content from web pages.
 
 ### 5) Query
 ```bash

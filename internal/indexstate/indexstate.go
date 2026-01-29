@@ -15,10 +15,11 @@ type IndexState struct {
 	Files   map[string]FileEntry `json:"files"` // key: source_path
 }
 
-// FileEntry tracks metadata for a single file.
+// FileEntry tracks metadata for a single file or URL.
 type FileEntry struct {
-	Mtime    int64    `json:"mtime"`
-	PointIDs []string `json:"point_ids"`
+	Mtime       int64    `json:"mtime"`
+	PointIDs    []string `json:"point_ids"`
+	ContentHash string   `json:"content_hash,omitempty"` // Used for URL deduplication
 }
 
 // Store is an interface for index state operations.
@@ -143,7 +144,7 @@ func (f *FileStore) Save(baseDir string, state *IndexState) error {
 
 	// Atomic rename
 	if err := os.Rename(tmpPath, indexPath); err != nil {
-		os.Remove(tmpPath) // best-effort cleanup
+		_ = os.Remove(tmpPath) // best-effort cleanup
 		return fmt.Errorf("failed to rename temp index state: %w", err)
 	}
 
@@ -215,7 +216,7 @@ func (f *FileStore) Transaction(baseDir string, fn func(*IndexState) error) erro
 
 	// Atomic rename
 	if err := os.Rename(tmpPath, indexPath); err != nil {
-		os.Remove(tmpPath) // best-effort cleanup
+		_ = os.Remove(tmpPath) // best-effort cleanup
 		return fmt.Errorf("failed to rename temp index state: %w", err)
 	}
 

@@ -113,10 +113,12 @@ func (f *fakeIndexStateStore) Load(baseDir string) (*indexstate.IndexState, erro
 		return s, nil
 	}
 	// Return empty index state if not found (matching FileStore behavior)
-	return &indexstate.IndexState{
+	state := &indexstate.IndexState{
 		Version: 1,
 		Files:   make(map[string]indexstate.FileEntry),
-	}, nil
+	}
+	f.states[baseDir] = state
+	return state, nil
 }
 
 func (f *fakeIndexStateStore) Save(baseDir string, state *indexstate.IndexState) error {
@@ -132,8 +134,9 @@ func (f *fakeIndexStateStore) Save(baseDir string, state *indexstate.IndexState)
 		pointIDsCopy := make([]string, len(v.PointIDs))
 		copy(pointIDsCopy, v.PointIDs)
 		filesCopy[k] = indexstate.FileEntry{
-			Mtime:    v.Mtime,
-			PointIDs: pointIDsCopy,
+			Mtime:       v.Mtime,
+			PointIDs:    pointIDsCopy,
+			ContentHash: v.ContentHash,
 		}
 	}
 	f.states[baseDir] = &indexstate.IndexState{
