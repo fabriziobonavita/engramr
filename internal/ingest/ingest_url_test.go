@@ -38,7 +38,7 @@ func TestIngestURL_Deduplication(t *testing.T) {
 	// Create test server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	}))
 	defer server.Close()
 
@@ -159,9 +159,9 @@ func TestIngestURL_ContentChange(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
 		if contentVersion == 1 {
-			w.Write([]byte(htmlContent1))
+			_, _ = w.Write([]byte(htmlContent1))
 		} else {
-			w.Write([]byte(htmlContent2))
+			_, _ = w.Write([]byte(htmlContent2))
 		}
 	}))
 	defer server.Close()
@@ -241,7 +241,7 @@ func TestIngestURL_RedirectCanonicalURL(t *testing.T) {
 	</main>
 </body>
 </html>`
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	}))
 	defer server.Close()
 
@@ -337,7 +337,7 @@ func TestIngestURL_Metadata(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	}))
 	defer server.Close()
 

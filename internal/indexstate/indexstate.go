@@ -144,7 +144,7 @@ func (f *FileStore) Save(baseDir string, state *IndexState) error {
 
 	// Atomic rename
 	if err := os.Rename(tmpPath, indexPath); err != nil {
-		os.Remove(tmpPath) // best-effort cleanup
+		_ = os.Remove(tmpPath) // best-effort cleanup
 		return fmt.Errorf("failed to rename temp index state: %w", err)
 	}
 
@@ -216,7 +216,7 @@ func (f *FileStore) Transaction(baseDir string, fn func(*IndexState) error) erro
 
 	// Atomic rename
 	if err := os.Rename(tmpPath, indexPath); err != nil {
-		os.Remove(tmpPath) // best-effort cleanup
+		_ = os.Remove(tmpPath) // best-effort cleanup
 		return fmt.Errorf("failed to rename temp index state: %w", err)
 	}
 

@@ -1,7 +1,6 @@
 package extract
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -12,7 +11,6 @@ import (
 	"time"
 
 	"github.com/mackee/go-readability"
-	"golang.org/x/net/html"
 )
 
 const (
@@ -62,7 +60,9 @@ func ExtractURL(userURL string, userAgent string) (*URLContent, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch URL: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	// Get final URL after redirects
 	canonicalURL := resp.Request.URL.String()
@@ -131,31 +131,6 @@ func extractHTML(body []byte, sourceURL string) (string, string, error) {
 	}
 
 	return title, markdown, nil
-}
-
-// extractTitleFromHTML extracts the title from HTML.
-func extractTitleFromHTML(body []byte) string {
-	doc, err := html.Parse(bytes.NewReader(body))
-	if err != nil {
-		return ""
-	}
-
-	var findTitle func(*html.Node) string
-	findTitle = func(n *html.Node) string {
-		if n.Type == html.ElementNode && n.Data == "title" {
-			if n.FirstChild != nil {
-				return strings.TrimSpace(n.FirstChild.Data)
-			}
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			if title := findTitle(c); title != "" {
-				return title
-			}
-		}
-		return ""
-	}
-
-	return findTitle(doc)
 }
 
 // extractTitleFromPlainText extracts a title from plain text (first line or first sentence).

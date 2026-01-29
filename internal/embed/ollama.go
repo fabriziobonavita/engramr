@@ -42,7 +42,9 @@ func (c *OllamaClient) Embed(ctx context.Context, input string) ([]float32, erro
 	if err != nil {
 		return nil, fmt.Errorf("ollama not reachable at %s - run: docker compose up -d: %w", c.BaseURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

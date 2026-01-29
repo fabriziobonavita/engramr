@@ -29,7 +29,7 @@ Use 'ingest path' to ingest local Markdown files.
 Use 'ingest url' to ingest web pages using readability-based extraction.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return fmt.Errorf("Usage changed: use engramr ingest path <path> or engramr ingest url <url>")
+			return fmt.Errorf("usage changed: use engramr ingest path <path> or engramr ingest url <url>")
 		},
 	}
 

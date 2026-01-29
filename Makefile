@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: build run test test-all coverage coverage-html integration deps-up deps-down lint
+.PHONY: build run test test-all coverage coverage-html integration deps-up deps-down lint check
 
 build:
 	go build -o bin/engramr ./cmd/engramr
@@ -12,7 +12,12 @@ test:
 	go test ./...
 
 lint:
-	@echo "lint: TODO (hook up golangci-lint)"
+	@echo "Running golangci-lint..."
+	@golangci-lint run ./...
+	@echo "Linting complete!"
+
+# Run linting and tests together (useful for CI/pre-commit checks)
+check: lint test
 
 # Runs unit + integration tests (requires Qdrant + Ollama running)
 test-all: deps-up

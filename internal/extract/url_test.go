@@ -40,7 +40,7 @@ func TestExtractURL_Redirect(t *testing.T) {
 	<footer>Footer content | Privacy | Terms</footer>
 </body>
 </html>`
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	}))
 	defer server.Close()
 
@@ -88,7 +88,7 @@ func TestExtractURL_ReadabilityExtraction(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	}))
 	defer server.Close()
 
@@ -127,7 +127,7 @@ And should be ingested directly without HTML parsing.`
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte(plainText))
+		_, _ = w.Write([]byte(plainText))
 	}))
 	defer server.Close()
 
@@ -149,7 +149,7 @@ And should be ingested directly without HTML parsing.`
 func TestExtractURL_UnsupportedContentType(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"key": "value"}`))
+		_, _ = w.Write([]byte(`{"key": "value"}`))
 	}))
 	defer server.Close()
 
@@ -197,7 +197,7 @@ func TestExtractURL_ContentHash(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write([]byte(htmlContent))
+		_, _ = w.Write([]byte(htmlContent))
 	}))
 	defer server.Close()
 
@@ -225,7 +225,7 @@ func TestExtractURL_ContentHash(t *testing.T) {
 func TestExtractURL_FetchedAt(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("test"))
+		_, _ = w.Write([]byte("test"))
 	}))
 	defer server.Close()
 
